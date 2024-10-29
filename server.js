@@ -3,8 +3,8 @@ const fs = require('fs');
 
 // SSL certificate options
 const options = {
-  key: fs.readFileSync('server.key'),
-  cert: fs.readFileSync('server.cert')
+  key: fs.readFileSync('localhost-key.pem'),
+  cert: fs.readFileSync('localhost-cert.pem')
 };
 
 // Create HTTPS server
