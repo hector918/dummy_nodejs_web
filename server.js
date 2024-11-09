@@ -3,8 +3,8 @@ const fs = require('fs');
 
 // SSL certificate options
 const options = {
-  key: fs.readFileSync('localhost-key.pem'),
-  cert: fs.readFileSync('localhost-cert.pem')
+  key: fs.readFileSync('./ssl/server.key'),
+  cert: fs.readFileSync('./ssl/server.cert')
 };
 
 // File sharing route handler
