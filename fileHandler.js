@@ -29,6 +29,7 @@ class FileHandler {
 
     try {
       await this.validateRequest(filePath);
+      console.log(filePath)
       await this.streamFile(filePath, res, logEntry);
       logEntry.status = 'success';
       logEntry.result = 'File streamed successfully';
