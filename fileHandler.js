@@ -20,17 +20,14 @@ class FileHandler {
   }
 
   async handleRequest(req, res) {
-    console.log(req.url)
-    if (!req.url.startsWith('/files/')) {
+    if (!req.url.startsWith(`/${this.config.files.baseWebRoute}/`)) {
       return false;
     }
-
+    
     const logEntry = this.logger.createAccessEntry(req);
-    const filePath = req.url.slice(7); // Remove '/files/' prefix
-
+    const filePath = req.url.replace(`/${this.config.files.baseWebRoute}`, `./${this.config.files.basePath}`);
     try {
       await this.validateRequest(filePath);
-      console.log(filePath)
       await this.streamFile(filePath, res, logEntry);
       logEntry.status = 'success';
       logEntry.result = 'File streamed successfully';
@@ -49,9 +46,7 @@ class FileHandler {
 
   async validateRequest(filePath) {
     
-    if (filePath.includes('..') || !filePath.startsWith(this.config.files.basePath)) {
-        console.log(this.config.files.basePath);
-
+    if (filePath.includes('..') || !filePath.startsWith(`./${this.config.files.basePath}`)) {
       throw new Error('ACCESS_DENIED');
     }
 
@@ -62,14 +57,14 @@ class FileHandler {
     }
 
     try {
-      await fs.promises.access(path.join(this.config.files.basePath, filePath), fs.constants.F_OK);
+      await fs.promises.access(path.join(filePath), fs.constants.F_OK);
     } catch {
       throw new Error('FILE_NOT_FOUND');
     }
   }
 
   async streamFile(filePath, res, logEntry) {
-    const fullPath = path.join(this.config.files.basePath, filePath);
+    const fullPath = path.join(filePath);
     const fileStream = fs.createReadStream(fullPath);
 
     fileStream.on('error', (error) => {

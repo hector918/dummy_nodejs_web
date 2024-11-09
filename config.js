@@ -11,6 +11,7 @@ const config = {
   },
   files: {
     basePath: 'shared_files',
+    baseWebRoute: 'files',
     allowedExtensions: ['.txt', '.pdf', '.jpg', '.png', '.mp4']
   },
   logging: {
