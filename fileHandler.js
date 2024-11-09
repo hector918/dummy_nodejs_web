@@ -46,7 +46,10 @@ class FileHandler {
   }
 
   async validateRequest(filePath) {
+    
     if (filePath.includes('..') || !filePath.startsWith(this.config.files.basePath)) {
+        console.log(this.config.files.basePath);
+
       throw new Error('ACCESS_DENIED');
     }
 
