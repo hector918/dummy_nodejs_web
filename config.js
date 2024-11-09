@@ -10,7 +10,7 @@ const config = {
     }
   },
   files: {
-    basePath: 'shared',
+    basePath: 'shared_files',
     allowedExtensions: ['.txt', '.pdf', '.jpg', '.png', '.mp4']
   },
   logging: {

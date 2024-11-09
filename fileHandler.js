@@ -1,5 +1,3 @@
-
-// fileHandler.js
 const fs = require('fs');
 const path = require('path');
 
@@ -7,6 +5,18 @@ class FileHandler {
   constructor(config, logger) {
     this.config = config;
     this.logger = logger;
+
+    // Ensure base directory exists on initialization
+    this.createBaseDirectory();
+  }
+
+  createBaseDirectory() {
+    if (!fs.existsSync(this.config.files.basePath)) {
+      fs.mkdirSync(this.config.files.basePath, { recursive: true });
+      console.log(`Base directory ${this.config.files.basePath} created.`);
+    } else {
+      console.log(`Base directory ${this.config.files.basePath} already exists.`);
+    }
   }
 
   async handleRequest(req, res) {
@@ -55,7 +65,7 @@ class FileHandler {
 
     res.writeHead(200);
     fileStream.pipe(res);
-    
+
     logEntry.status = 'success';
     logEntry.result = 'File streamed successfully';
     await this.logger.logAccess(logEntry);
@@ -80,6 +90,5 @@ class FileHandler {
     this.logger.logAccess(logEntry);
   }
 }
-
 
 module.exports = FileHandler;
