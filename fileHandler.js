@@ -30,8 +30,16 @@ class FileHandler {
     try {
       await this.validateRequest(filePath);
       await this.streamFile(filePath, res, logEntry);
+      logEntry.status = 'success';
+      logEntry.result = 'File streamed successfully';
     } catch (error) {
       this.handleError(error, res, logEntry);
+    } finally {
+      // Ensure log entry records the reason for success or failure
+      if (!logEntry.result) {
+        logEntry.result = 'Request handled with unknown outcome';
+      }
+      this.logger.logAccess(logEntry);
     }
 
     return true;
@@ -60,15 +68,12 @@ class FileHandler {
     const fileStream = fs.createReadStream(fullPath);
 
     fileStream.on('error', (error) => {
+      logEntry.result = 'READ_ERROR';
       throw new Error('READ_ERROR');
     });
 
     res.writeHead(200);
     fileStream.pipe(res);
-
-    logEntry.status = 'success';
-    logEntry.result = 'File streamed successfully';
-    await this.logger.logAccess(logEntry);
   }
 
   handleError(error, res, logEntry) {
@@ -87,7 +92,6 @@ class FileHandler {
 
     logEntry.status = 'error';
     logEntry.result = response.message;
-    this.logger.logAccess(logEntry);
   }
 }
 
