@@ -38,11 +38,18 @@ class Logger {
   }
 
   createAccessEntry(req) {
+    let ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
+    
+    // 'x-forwarded-for' 可能包含多个 IP，取第一个（客户端的真实 IP）
+    if (ip && ip.includes(',')) {
+      ip = ip.split(',')[0].trim();
+    }
+  
     return {
       timestamp: new Date().toISOString(),
       method: req.method,
       url: req.url,
-      ip: req.socket.remoteAddress,
+      ip: ip,
       userAgent: req.headers['user-agent'],
       referrer: req.headers.referer || 'direct',
       status: 'pending',
