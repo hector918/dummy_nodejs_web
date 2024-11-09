@@ -7,6 +7,51 @@ const options = {
   cert: fs.readFileSync('localhost-cert.pem')
 };
 
+// File sharing route handler
+const handleFileRequest = (req, res) => {
+  if (req.url.startsWith('/files/')) {
+    const filePath = req.url.slice(7); // Remove '/files/' prefix
+    
+    // Security checks
+    if (filePath.includes('..') || !filePath.startsWith('shared/')) {
+      res.writeHead(403);
+      res.end('Access denied');
+      return true;
+    }
+
+    // Validate file extension
+    const allowedExtensions = ['.txt', '.pdf', '.jpg', '.png', '.mp4'];
+    const hasValidExtension = allowedExtensions.some(ext => filePath.toLowerCase().endsWith(ext));
+    if (!hasValidExtension) {
+      res.writeHead(403);
+      res.end('File type not allowed');
+      return true;
+    }
+
+    // Check if file exists
+    fs.access(`shared/${filePath}`, fs.constants.F_OK, (err) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('File not found');
+        return;
+      }
+
+      // Stream file to response
+      const fileStream = fs.createReadStream(`shared/${filePath}`);
+      fileStream.on('error', (error) => {
+        res.writeHead(500);
+        res.end('Error reading file');
+      });
+
+      // Pipe file to response
+      fileStream.pipe(res);
+    });
+    return true;
+  }
+  return false;
+};
+
+
 // Create HTTPS server
 const server = https.createServer(options, (req, res) => {
   // Log request details
