@@ -7,9 +7,10 @@ const logsFolderName = './logs';
 class Logger {
   constructor(logFileName) {
     // Create logs directory if it doesn't exist
-    fs.mkdir(path.join(logsFolderName), { recursive: true })
+    fs.mkdir(logsFolderName, { recursive: true })
       .catch(err => console.error('Error creating logs directory:', err));
-    this.logDir = path.join(logsFolderName, logFileName); // Ensure logs are stored in a "logs" subdirectory
+    this.logDir = logsFolderName; // Ensure logs are stored in the "logs" subdirectory
+    this.logFileName = logFileName;
   }
 
   getLogFilePath(type) {
