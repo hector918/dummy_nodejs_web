@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const mime = require('mime-types');
 const crypto = require('crypto');
 
 class FileHandler {
@@ -12,13 +11,34 @@ class FileHandler {
     this.config = this.validateConfig(config);
     this.logger = logger;
     this.createBaseDirectory();
+    
+    // 基础 MIME 类型映射
+    this.mimeTypes = {
+      '.html': 'text/html',
+      '.htm': 'text/html',
+      '.css': 'text/css',
+      '.js': 'application/javascript',
+      '.json': 'application/json',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.svg': 'image/svg+xml',
+      '.pdf': 'application/pdf',
+      '.txt': 'text/plain',
+      '.mp4': 'video/mp4',
+      '.mp3': 'audio/mpeg',
+      '.zip': 'application/zip'
+    };
+  }
+
+  getMimeType(filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    return this.mimeTypes[ext] || 'application/octet-stream';
   }
 
   validateConfig(config) {
-    // 确保 basePath 是绝对路径
     const absoluteBasePath = path.resolve(config.files.basePath);
-    
-    // 记录基础路径配置
     console.log('Configured base path:', absoluteBasePath);
     
     return {
@@ -43,7 +63,6 @@ class FileHandler {
         this.logger.info(`Base directory created: ${this.config.files.basePath}`);
       }
       
-      // 验证目录权限
       fs.accessSync(this.config.files.basePath, fs.constants.R_OK);
       this.logger.info(`Base directory is readable: ${this.config.files.basePath}`);
     } catch (error) {
@@ -59,12 +78,9 @@ class FileHandler {
 
     const requestId = crypto.randomUUID();
     const logEntry = this.logger.createAccessEntry(req, requestId);
-    
-    // 解码并清理文件路径
-    const rawFilePath = req.url.slice(7); // 移除 '/files/' 前缀
+    const rawFilePath = req.url.slice(7);
     const decodedPath = decodeURIComponent(rawFilePath).trim();
     
-    // 记录请求信息
     this.logger.info({
       requestId,
       message: 'File request received',
@@ -88,18 +104,15 @@ class FileHandler {
   }
 
   async validateRequest(filePath, req) {
-    // 详细的路径验证日志
     this.logger.debug({
       message: 'Starting path validation',
       originalPath: filePath,
       basePath: this.config.files.basePath
     });
 
-    // 规范化路径，移除任何 "../" 序列
     const normalizedPath = path.normalize(filePath).replace(/^(\.\.(\/|\\|$))+/, '');
     const fullPath = path.join(this.config.files.basePath, normalizedPath);
     
-    // 记录路径处理结果
     this.logger.debug({
       message: 'Path processing result',
       normalizedPath,
@@ -107,7 +120,6 @@ class FileHandler {
       basePathCheck: fullPath.startsWith(this.config.files.basePath)
     });
 
-    // 验证路径是否在基础目录内
     if (!fullPath.startsWith(this.config.files.basePath)) {
       this.logger.warn({
         message: 'Path validation failed - outside base directory',
@@ -117,7 +129,6 @@ class FileHandler {
       throw new Error('ACCESS_DENIED');
     }
 
-    // 验证文件扩展名
     const extension = path.extname(filePath).toLowerCase();
     if (!this.config.files.allowedExtensions.has(extension)) {
       this.logger.warn({
@@ -131,7 +142,6 @@ class FileHandler {
     try {
       const stats = await fs.promises.stat(fullPath);
       
-      // 验证是否为文件
       if (!stats.isFile()) {
         this.logger.warn({
           message: 'Path is not a file',
@@ -141,7 +151,6 @@ class FileHandler {
         throw new Error('NOT_A_FILE');
       }
 
-      // 验证文件大小
       if (stats.size > this.config.files.maxFileSize) {
         this.logger.warn({
           message: 'File too large',
@@ -151,10 +160,8 @@ class FileHandler {
         throw new Error('FILE_TOO_LARGE');
       }
 
-      // 验证文件权限
       await fs.promises.access(fullPath, fs.constants.R_OK);
       
-      // 存储验证通过的信息
       req.fileStats = stats;
       req.fullPath = fullPath;
       
@@ -190,7 +197,68 @@ class FileHandler {
     }
   }
 
-  // streamFile 方法保持不变...
+  async streamFile(filePath, req, res, logEntry) {
+    const { fullPath, fileStats } = req;
+    
+    // 使用内置的 MIME 类型映射
+    const mimeType = this.getMimeType(fullPath);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Length', fileStats.size);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Last-Modified', fileStats.mtime.toUTCString());
+
+    // 处理范围请求
+    const range = req.headers.range;
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileStats.size - 1;
+
+      if (start >= fileStats.size || end >= fileStats.size) {
+        res.writeHead(416, { 'Content-Range': `bytes */${fileStats.size}` });
+        return res.end();
+      }
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileStats.size}`,
+        'Content-Length': end - start + 1
+      });
+
+      const fileStream = fs.createReadStream(fullPath, { start, end });
+      await this.pipeStream(fileStream, res, logEntry);
+    } else {
+      res.writeHead(200);
+      const fileStream = fs.createReadStream(fullPath);
+      await this.pipeStream(fileStream, res, logEntry);
+    }
+  }
+
+  pipeStream(fileStream, res, logEntry) {
+    return new Promise((resolve, reject) => {
+      const streamTimeout = setTimeout(() => {
+        fileStream.destroy();
+        reject(new Error('STREAM_TIMEOUT'));
+      }, this.config.files.streamTimeout);
+
+      fileStream
+        .on('error', (error) => {
+          clearTimeout(streamTimeout);
+          logEntry.result = 'READ_ERROR';
+          reject(new Error('READ_ERROR'));
+        })
+        .on('end', () => {
+          clearTimeout(streamTimeout);
+          resolve();
+        })
+        .pipe(res);
+
+      res.on('close', () => {
+        clearTimeout(streamTimeout);
+        fileStream.destroy();
+      });
+    });
+  }
 
   handleError(error, res, logEntry) {
     const errorResponses = {
@@ -208,7 +276,6 @@ class FileHandler {
     const response = errorResponses[error.message] || 
                     { status: 500, message: 'Internal server error' };
 
-    // 记录详细的错误信息
     this.logger.error({
       message: 'Request handling error',
       errorType: error.message,
