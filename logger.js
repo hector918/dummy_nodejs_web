@@ -1,15 +1,23 @@
-// logger.js
 const fs = require('fs').promises;
+const path = require('path');
+
+const RETENTION_DAYS = 30; // Number of days to keep logs
+
 
 class Logger {
-  constructor(accessLogPath, serverLogPath) {
-    this.accessLogPath = accessLogPath;
-    this.serverLogPath = serverLogPath;
+  constructor(logDir) {
+    this.logDir = path.join(logDir, 'logs'); // Ensure logs are stored in a "logs" subdirectory
+  }
+
+  getLogFilePath(type) {
+    const date = new Date().toISOString().split('T')[0]; // Format as YYYY-MM-DD
+    return path.join(this.logDir, `${type}-log-${date}.txt`);
   }
 
   async logAccess(entry) {
     try {
-      await fs.appendFile(this.accessLogPath, JSON.stringify(entry) + '\n');
+      const accessLogPath = this.getLogFilePath('access');
+      await fs.appendFile(accessLogPath, JSON.stringify(entry) + '\n');
     } catch (err) {
       console.error('Error writing to access log:', err);
     }
@@ -18,7 +26,8 @@ class Logger {
   async logServer(message) {
     const logEntry = `${new Date().toISOString()} - ${message}\n`;
     try {
-      await fs.appendFile(this.serverLogPath, logEntry);
+      const serverLogPath = this.getLogFilePath('server');
+      await fs.appendFile(serverLogPath, logEntry);
     } catch (err) {
       console.error('Error writing to server log:', err);
     }
@@ -35,6 +44,26 @@ class Logger {
       status: 'pending',
       result: null
     };
+  }
+
+  async cleanOldLogs() {
+    try {
+      const files = await fs.readdir(this.logDir);
+      const now = new Date();
+      for (const file of files) {
+        const match = file.match(/-(\d{4}-\d{2}-\d{2})\.txt$/);
+        if (match) {
+          const fileDate = new Date(match[1]);
+          const ageInDays = (now - fileDate) / (1000 * 60 * 60 * 24);
+          if (ageInDays > RETENTION_DAYS) {
+            await fs.unlink(path.join(this.logDir, file));
+            console.log(`Deleted old log file: ${file}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error cleaning old logs:', err);
+    }
   }
 }
 
