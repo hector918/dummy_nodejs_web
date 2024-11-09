@@ -20,6 +20,7 @@ class FileHandler {
   }
 
   async handleRequest(req, res) {
+    console.log(req.url)
     if (!req.url.startsWith('/files/')) {
       return false;
     }
